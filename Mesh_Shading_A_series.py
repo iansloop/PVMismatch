@@ -87,202 +87,82 @@ nominal_temp_A = 29.911 + 273.15  # kelvin
 # irradiance received by a fully mesh-shaded cell
 full_mesh_shade = mesh_shade * natural_irrad
 
-""""Simulation"""
-# X series (Gen E)
-# X series cell and module properties
-#'''
-RS=0.008#0.00477#0.0022904554199000655
-RSH=250.01226369025448#14.866#5.524413919705285
-ISAT1_T0=2.974132024e-12#5.615E-12#2.6951679883577537e-12
-ISAT2_T0=2.394153128e-7#6.133E-7#9.078875806333005e-7
-ISC0_T0=6.3056#6.39#6.590375
-ARBD=1.036748445065697e-4#1.735E-2
-BRBD=0#-0.6588
-VRBD=-4.5#-5.527260068445654#-4.50
-NRBD=3.284628553041425#3.926
-ALPHA_ISC=0.0003551#0.0003551
-CELLAREA=153.33
-EG=1.1#1.166
-#'''
-'''
-RS=0.00477#0.0022904554199000655
-RSH=14.866#5.524413919705285
-ISAT1_T0=5.615E-12#2.6951679883577537e-12
-ISAT2_T0=6.133E-7#9.078875806333005e-7
-ISC0_T0=6.39#6.590375
-ARBD=1.735E-2
-BRBD=-0.6588
-VRBD=-4.50
-NRBD=3.926
-ALPHA_ISC=0.0003551
-CELLAREA=153.33
-EG=1.166
-'''
-'''
-# Datasheet
-RS = 0.00477  # 0.0022904554199000655
-RSH = 14.866  # 5.524413919705285
-ISAT1_T0 = 5.615E-12  # 2.6951679883577537e-12
-ISAT2_T0 = 6.133E-7  # 9.078875806333005e-7
-ISC0_T0 = 6.66  # 6.590375
-ARBD = 1.735E-2
-BRBD = -0.6588
-VRBD = -4.50
-NRBD = 3.926
-ALPHA_ISC = 0.0003551
-CELLAREA = 153.33
-EG = 1.166
-'''
-VRBD = np.float64(VRBD)
-# Create PV system with inital irradiance and temperature
-pvcell_X = pvcell.PVcell(Rs=RS, Rsh=RSH, Isat1_T0=ISAT1_T0, Isat2_T0=ISAT2_T0,
-                         Isc0_T0=ISC0_T0, aRBD=ARBD, bRBD=BRBD, VRBD=VRBD,
-                         nRBD=NRBD, Eg=EG, alpha_Isc=ALPHA_ISC)
-pvmodule_X = pvmodule.PVmodule(pvcells=pvcell_X, Vbypass=[VRBD, VRBD, VRBD], cellArea=CELLAREA)
-pvsys_X = pvsystem.PVsystem(numberStrs=2, numberMods=4, pvmods=pvmodule_X)
-# pvsys_X = pvsystem.PVsystem(numberStrs=2,numberMods=4)
-plt.ion()
-pvsys_X.setSuns(inital_irr)
-pvsys_X.setTemps(nominal_temp_X)
-
-# shade first (index=0) and last (index=3) module completely on both X series strings (moving left to right)
-# pvsys_X.setSuns({0: {0:cardboard_shaded*inital_irr, 3:cardboard_shaded*inital_irr}, 1:{0:cardboard_shaded*inital_irr, 3:cardboard_shaded*inital_irr}})
-# per Chetan's recommendation, don't set suns lower than 0.01
-pvsys_X.setSuns({0: {0: 0.01, 3: 0.01}, 1: {0: 0.01, 3: 0.01}})
-
-# record initial Pmp, Imp, Vmp. First String is shaded, second string is unshaded control
-MPPT_X = pd.DataFrame(
-    columns=['Pmp', 'Pmp_control', 'Pmp_norm', 'Vmp', 'Vmp_control', 'Vmp_norm', 'Imp', 'Imp_control', 'Imp_norm'],
-    index=range(0, 10))
-MPPT_X.iloc[0] = {'Pmp': pvsys_X.pvmods[0][2].Pmod.max(), 'Vmp': pvsys_X.pvmods[0][2].Vmod.max(),
-                  'Imp': pvsys_X.pvmods[0][2].Imod.max(),
-                  'Pmp_control': pvsys_X.pvmods[1][2].Pmod.max(), 'Vmp_control': pvsys_X.pvmods[1][2].Vmod.max(),
-                  'Imp_control': pvsys_X.pvmods[1][2].Imod.max()}
-
-# shade cells, update temperatures, and record power for each phase of the test
-for i in range(0, 9):
-    #pvsys_X.pvmods[0][1].plotCell()
-    #pvsys_X.pvmods[0][1].plotMod()
-    # update the natural irradiance across ALL cells of 1st string, 2nd module
-    pvsys_X.setSuns(
-        {0: {1: {'cells': tuple(range(0, 96)),
-                 'Ee': tuple([pvsys_X.pvmods[0][1].Ee[j][0] * natural_irrad[i+1] / natural_irrad[i] for j in
-                              range(0, 96)])}}})
-
-    #update natural irradiance on the unshaded control module, string 2, module 3
-    pvsys_X.setSuns({1: {2: natural_irrad[i+1]}})
-    #update cell temperatures
-    pvsys_X.setTemps(temp_array_X[i])
-
-    if i == 0:
-        pvsys_X.setSuns({0: {1: {'cells': module_columns_X[0], 'Ee': (irrad_pattern_X[i+1],) * 12}}})
-    else:
-        # shading the rest of the columns
-        pvsys_X.setSuns({0: {1: {'cells' : module_columns_X[i - 1], 'Ee' : (irrad_pattern_X[i+1],) * 12}}})
-
-    #plot_pvm_irr(pvsys_X.pvmods[0][1])
-    # shading half of first column
-
-    MPPT_X.iloc[i + 1] = {'Pmp': pvsys_X.pvmods[0][1].Pmod.max(), 'Vmp': pvsys_X.pvmods[0][1].Vmod.max(),
-                          'Imp': pvsys_X.pvmods[0][1].Imod.max(),
-                          'Pmp_control': pvsys_X.pvmods[1][2].Pmod.max(),
-                          'Vmp_control': pvsys_X.pvmods[1][2].Vmod.max(),
-                          'Imp_control': pvsys_X.pvmods[1][2].Imod.max()}
-
-MPPT_X['Pmp_norm'] = MPPT_X['Pmp'] / MPPT_X['Pmp_control']
-MPPT_X['Vmp_norm'] = MPPT_X['Vmp'] / MPPT_X['Vmp_control']
-MPPT_X['Imp_norm'] = MPPT_X['Imp'] / MPPT_X['Imp_control']
-
-MPPT_X_exp['Type_D_norm'] = MPPT_X_exp['W5 Type D'] / East_DC_Power['Power E5 Type D']
-MPPT_X_exp['Type_E_norm'] = MPPT_X_exp['W6 Type E'] / East_DC_Power['Power E6 Type E']
-
-#MPPT_X['Exp_average'] =
-
-# plotting
-# error_X = (MPPT_X['Pmp']-MPPT_X_experimental)/MPPT_X_experimental*100
-
-# plot Pmp
-custom_interval = np.concatenate((pd.Series(ten_min_interval.iloc[0]-pd.Timedelta(minutes=5)), pd.Series(ten_min_interval.iloc[0]), ten_min_interval.loc[30:110] - pd.Timedelta(minutes=5), pd.Series(ten_min_interval.iloc[-1])))
-custom_axis = np.concatenate((['0'], [time_axis[0]], ['2.5','5','10','15','20','25','30','35','40'], [time_axis[-1]]))
-
-plt.figure()
-plt.subplot(211)
-plt.plot(ten_min_interval - pd.Timedelta(minutes=5), MPPT_X['Pmp_norm'], 'b*', label='PV Mismatch')
-plt.plot(MPPT_X_exp['Timestamps'], MPPT_X_exp['Type_D_norm'], '--', label='Type D')
-plt.plot(MPPT_X_exp['Timestamps'], MPPT_X_exp['Type_E_norm'], label='Type E')
-# plt.plot(error_X,label='Error (%)')
-plt.legend()
-plt.title('X-Series Type E and D Module (DC)')
-plt.xlabel('Shading Width (in) and Start/Stop Timestamps (XX:XX)')
-plt.xticks(custom_interval, custom_axis)
-plt.ylabel('Normalized DC Power')
-plt.yticks(np.array([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0]))
-plt.grid(True)
-
-#plot error
-reduced_MPPT_X_exp = MPPT_X_exp.iloc[15:115:10]
-MPPT_X['Type_D_error'] = np.array([(MPPT_X['Pmp_norm'].iloc[i] - reduced_MPPT_X_exp['Type_D_norm'].iloc[i])/reduced_MPPT_X_exp['Type_D_norm'].iloc[i] for i in range(0,10)])*100
-MPPT_X['Type_E'] = np.array([(reduced_MPPT_X_exp['Type_E_norm'].iloc[i]-MPPT_X['Pmp_norm'].iloc[i])/reduced_MPPT_X_exp['Type_E_norm'].iloc[i] for i in range(0,10)])*100
-
-plt.subplot(212)
-plt.plot(ten_min_interval - pd.Timedelta(minutes=5), MPPT_X['Type_D_error'], '*',label='Type D')
-plt.plot(ten_min_interval - pd.Timedelta(minutes=5), MPPT_X['Type_E'], 'o',label='Type E')
-plt.legend()
-plt.title('Error Between PV Mismatch and Type D and E Experimental Values')
-plt.xlabel('Shading Width (in)')
-plt.xticks(ten_min_interval.loc[20:110] - pd.Timedelta(minutes=5), ['0','2.5','5','10','15','20','25','30','35','40'])
-plt.ylabel('% Error')
-#plt.yticks([y/10.0 for y in range(0,110,10)], [y/10.0 for y in range(0,110,10)])
-plt.grid(True)
-
-#
-# # plot Imp
-# plt.figure(2)
-# plt.plot(ten_min_interval - pd.Timedelta(minutes=5), MPPT_X['Imp'], 'b*', label='PV Mismatch')
-# plt.plot(MPPT_X_exp['Timestamps'],
-#          MPPT_X_exp['SPDA.RND.DCM_ROOF.StrCurrent_W5'] + MPPT_X_exp['SPDA.RND.DCM_ROOF.StrCurrent_W6'],
-#          label='Experimental')
-# # plt.plot(error_X,label='Error (%)')
-# plt.legend()
-# plt.xlabel('Test Interval')
-# plt.xticks(ten_min_interval)
-# plt.ylabel('DC Imp (A)')
-# plt.grid(True)
-#
-# # plot Vmp
-# plt.figure(3)
-# plt.plot(ten_min_interval - pd.Timedelta(minutes=5), MPPT_X['Vmp'], 'b*', label='PV Mismatch')
-# plt.plot(MPPT_X_exp['Timestamps'], MPPT_X_exp['SPDA.RND.DCM_ROOF.StrVoltage_W5'], label='Experimental')
-# # plt.plot(error_X,label='Error (%)')
-# plt.legend()
-# plt.xlabel('Test Interval')
-# plt.xticks(ten_min_interval)
-# plt.ylabel('DC Vmp (V)')
-# plt.grid(True)
-
-# pvsys_X.pvmods[0][1].plotMod()
-# pvsys_X.plotSys()
-
 
     #A series
 #A series (NGT) cell and module properties
+# Adam's values
+RS = 0.0046  # [ohm] series resistance
+RSH = 100  # [ohm] shunt resistance
+ISAT1_T0 = 4.35e-12  # [A] diode one saturation current
+ISAT2_T0 = 1.85e-07  # [A] diode two saturation current
+ISC0_T0 = 10.96  # [A] reference short circuit current
+#TCELL = 298.15  # [K] cell temperature
+ARBD = 1.036748445065697E-4  # reverse breakdown coefficient 1
+BRBD = 0.  # reverse breakdown coefficient 2
+VRBD_ = -5.527260068445654  # [V] reverse breakdown voltage
+NRBD = 3.284628553041425  # reverse breakdown exponent
+EG = 1.1  # [eV] band gap of cSi
+ALPHA_ISC = 0.0003551  # [1/K] short circuit current temperature coefficient
+#NPTS = 1500
+cellArea = 258.26
+# Module parameters
+#NUMBERCELLS = 66
+Vbypass = np.float64(-0.5)  # [V] trigger voltage of bypass diode
+#MODULEAREA = 1.8629  # [m2]
+# Tamir's email values
+'''
 ISC0_T0=10.2
 RS=6.2e-3
 RSH=38.7
 ISAT1_T0=6.46e-12
 ISAT2_T0=2.58e-7
 ARBD=2.04
+BRBD=-0.6588
 VRBD=-11.8211
 NRBD=10
+cellArea=258.25
+EG = 1.166
+ALPHA_ISC = 0.0003551
+Vbypass = -0.5
+'''
+# David Jacob's values
+'''
+ISC0_T0=10.2
+RS=6.2e-3
+RSH=38.7
+ISAT1_T0=6.46e-12
+ISAT2_T0=2.58e-7
+ARBD=0.63
+BRBD=0.52
+VRBD=-6.00
+NRBD=1.22
 cellArea=258.3
 EG = 1.166
 ALPHA_ISC = 0.0003551
+Vbypass = -0.5
+'''
+# Tamir's table values
+'''
+ISC0_T0=10.0
+RS=0.0032
+RSH=8.025
+ISAT1_T0=4.151E-12
+ISAT2_T0=2.702E-06
+ARBD=1.735E-02
+BRBD=-0.6588
+VRBD=-4.50
+NRBD=3.926
+cellArea=258.25
+EG = 1.166
+ALPHA_ISC = 0.0003551
+Vbypass = -0.5
+'''
 
 #create non-standard NGT cell and PV system with inital irradiance and temperature
 pvcell_A = pvcell.PVcell(Rs=RS, Rsh=RSH, Isat1_T0=ISAT1_T0, Isat2_T0=ISAT2_T0,
                  Isc0_T0=ISC0_T0, aRBD=ARBD, VRBD=VRBD,
-                 nRBD=NRBD, Eg=EG, alpha_Isc=ALPHA_ISC)
-pvmodule_A = pvmodule.PVmodule(cell_pos=pvmodule.standard_cellpos_pat(11,[6]), Vbypass=VRBD, pvcells=pvcell_A, cellArea=cellArea)
+                 nRBD=NRBD, bRBD=BRBD, Eg=EG, alpha_Isc=ALPHA_ISC)
+pvmodule_A = pvmodule.PVmodule(cell_pos=pvmodule.standard_cellpos_pat(11,[6]), Vbypass=[Vbypass], pvcells=pvcell_A, cellArea=cellArea)
 pvsys_A = pvsystem.PVsystem(numberStrs=1,numberMods=4,pvmods=pvmodule_A)
 pvsys_A_control = pvsystem.PVsystem(numberStrs=1,numberMods=4,pvmods=pvmodule_A)
 plt.ion()
@@ -306,6 +186,8 @@ MPPT_A.iloc[0] = {'Pmp': sum([pvsys_A.pvmods[0][j].Pmod.max() for j in range(0,4
 
 #shade cells, update temperatures, and record power for each phase of the test
 for i in range(0,9):
+    #pvsys_A.pvmods[0][1].plotCell()
+    #pvsys_A.pvmods[0][1].plotMod()
     # update irradiance on all cells in string 1, module 2 and 3 (mesh shaded modules)
     pvsys_A.setSuns(
         {0: {1: {'cells': tuple(range(0, 66)),
@@ -359,15 +241,15 @@ for i in range(0,9):
 # MPPT_A_experimental = np.array([506.465182,400.882196,332.6838467,304.707138,232.7229941,217.095214,209.072656,202.431444,188.462066,182.377072])
 # error_A = (MPPT_A-MPPT_A_experimental)/MPPT_A_experimental*100
 plt.figure()
-plt.subplot(211)
+#plt.subplot(211)
 plt.plot(ten_min_interval - pd.Timedelta(minutes=5), MPPT_A['Pmp_norm'], 'bo', label='PV Mismatch')
-plt.plot(MPPT_A_exp['Timestamps'], MPPT_A_exp['A_series_norm'], label='A Series (NGT)')
+plt.plot(MPPT_A_exp['Timestamps'].iloc[14:107], MPPT_A_exp['A_series_norm'].iloc[14:107], label='A Series (NGT)')
 # plt.plot(error_X,label='Error (%)')
 plt.legend()
-plt.title('4-Module String of NGT AC')
-plt.xlabel('Shading Width (in) and Start/Stop Timestamps (XX:XX)')
-plt.xticks(custom_interval, custom_axis)
-plt.annotate(s='Shaded by Plastic \n Covers Only',
+plt.title('Performance of 4-Module NGT AC String vs Width of Column Mesh Shading')
+#plt.xlabel('Shading Width (in) and Start/Stop Timestamps (XX:XX)')
+plt.xticks(ten_min_interval - pd.Timedelta(minutes=5), [])
+plt.annotate(s='2 Modules Shaded by Plastic \n Covers, no Mesh Shading',
              xy=(ten_min_interval.iloc[0]-pd.Timedelta(minutes=5), 0.5),
              xytext=(ten_min_interval.iloc[0], 0.6),
              arrowprops={'arrowstyle': '->'})
@@ -379,19 +261,26 @@ plt.grid(True)
 reduced_MPPT_A_exp = MPPT_A_exp.iloc[15:115:10]
 MPPT_A['A_series_error'] = np.array([(MPPT_A['Pmp_norm'].iloc[i] - reduced_MPPT_A_exp['A_series_norm'].iloc[i])/reduced_MPPT_A_exp['A_series_norm'].iloc[i] for i in range(0,10)])*100
 
-plt.subplot(212)
-plt.plot(ten_min_interval - pd.Timedelta(minutes=5), MPPT_A['A_series_error'], '*',label='A Series (NGT)')
-plt.legend()
-plt.title('Error Between PV Mismatch and A Series Experimental Values')
-plt.xlabel('Shading Width (in)')
-plt.xticks(ten_min_interval.loc[20:110] - pd.Timedelta(minutes=5), ['0','2.5','5','10','15','20','25','30','35','40'])
-plt.ylabel('% Error')
-#plt.yticks([y/10.0 for y in range(0,110,10)], [y/10.0 for y in range(0,110,10)])
-plt.grid(True)
-plt.xticks(ten_min_interval.loc[20:110] - pd.Timedelta(minutes=5), ['0','2.5','5','10','15','20','25','30','35','40'])
-plt.ylabel('% Error')
-#plt.yticks([y/10.0 for y in range(0,110,10)], [y/10.0 for y in range(0,110,10)])
-plt.grid(True)
+# plt.subplot(212)
+# plt.plot(ten_min_interval - pd.Timedelta(minutes=5), MPPT_A['A_series_error'], '*',label='A Series (NGT)')
+# plt.legend()
+# plt.title('Error Between PV Mismatch and A Series Experimental Values')
+# plt.xlabel('Shading Width (in)')
+# plt.xticks(ten_min_interval.loc[20:110] - pd.Timedelta(minutes=5), ['0','2.5','5','10','15','20','25','30','35','40'])
+# plt.ylabel('% Error')
+# #plt.yticks([y/10.0 for y in range(0,110,10)], [y/10.0 for y in range(0,110,10)])
+# plt.grid(True)
+# plt.xticks(ten_min_interval.loc[20:110] - pd.Timedelta(minutes=5), ['0','2.5','5','10','15','20','25','30','35','40'])
+# plt.ylabel('% Error')
+# plt.yticks([-2,-1,0,1,2,3,4,5,6])
+# #plt.yticks([y/10.0 for y in range(0,110,10)], [y/10.0 for y in range(0,110,10)])
+# plt.grid(True)
+
+table = plt.table([np.round(MPPT_A['A_series_error'],3)],
+          colLabels=['0in','2.5in','5in','10in','15in','20in','25in','30in','35in','40in'],
+          rowLabels=['A Series Error (%)'], fontsize=12)
+
+plt.subplots_adjust(left=0.2, bottom=0.2)
 
 #extra plots
 
