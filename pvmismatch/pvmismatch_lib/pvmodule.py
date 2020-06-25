@@ -21,6 +21,12 @@ DEFAULT_BYPASS = 0
 MODULE_BYPASS = 1
 CUSTOM_SUBSTR_BYPASS = 2
 
+
+#TODO Steps as to how to solve this problem: allow input of bypass diode specs, then allow bypass diode to have Schockley Eqn
+
+# Default bypass diode specifications
+
+
 def standard_cellpos_pat(nrows, ncols_per_substr):
     """
     Standard module object builder.
